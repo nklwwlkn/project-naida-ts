@@ -8,7 +8,7 @@ import catchAsync from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
 
 /**
- * Required interfaces.
+ * Required interfaces (Requires renaming & attention).
  */
 interface IManageCookieOptions {
   expires: Date;
@@ -68,7 +68,7 @@ const sendToken = (user, statusCode: number, res: Response): void => {
 };
 
 /**
- * Sends the @code to the user's @phoneNumber , used in: @function login and @function signup
+ * Sends a @code to a user's @phoneNumber , used in: @function login and @function signup
  */
 const sendCode: any = async (
   req: Request,
@@ -78,12 +78,17 @@ const sendCode: any = async (
   channel: string
 ) => {
   try {
+    // TODO: chech if the @phoneNumber that user has provided is valid .
+
+    /** Send code via Twilio API using @phoneNumber and @channel */
     const data = await client.verify
       .services(process.env.TWILIO_SERVISE_ID)
       .verifications.create({
         to: `+${phoneNumber}`,
         channel: channel === "call" ? "call" : "sms",
       });
+
+    // TODO: Handle might occuring errors.
 
     if (data && data.status === "pending") {
       return res.status(200).json({
@@ -106,15 +111,20 @@ const userVerify: any = catchAsync(
     const phoneNumber: string = req.body.phoneNumber;
     const code: string = req.body.code;
 
+    // TODO: chech if the @phoneNumber that user has provided is valid .
+
     if (phoneNumber && code.length === 4) {
       const user = await User.findOne({ phoneNumber });
 
+      /** Next step after a code is being sent, verify this using @phoneNumber and the @code */
       const data = await client.verify
         .services(process.env.TWILIO_SERVISE_ID)
         .verificationChecks.create({
           to: `+${phoneNumber}`,
           code,
         });
+
+      // TODO: Handle might occuring errors.
 
       if (data.status === "approved") {
         await User.findOneAndUpdate(
@@ -123,8 +133,6 @@ const userVerify: any = catchAsync(
         );
         return sendToken(user, 200, res);
       }
-
-      return next(new AppError("Неверный код", 400));
     }
     return next(new AppError("Неверный код или мобильный номер", 400));
   }
@@ -136,12 +144,16 @@ const userVerify: any = catchAsync(
  */
 const signUp: any = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
+    /** @name - user's name ex: John Muhr. @phoneNumber - user's valid mobile phone number ex: 79999964593, @role either user/organization, ex: user */
     const name: string = req.body.name;
     const phoneNumber: string = req.body.phoneNumber;
     const role: string = req.body.role;
 
+    //TODO: check if the phoneNumber valid.
+
     let newUser = await User.findOne({ phoneNumber });
 
+    /** If the user doesn't exist in the database, create one with the provided info */
     if (!newUser) {
       newUser = await User.create({
         name: name,
@@ -166,27 +178,31 @@ const login: any = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const phoneNumber: string = req.body.phoneNumber;
 
+    //TODO: check if the phoneNumber valid.
+
     if (phoneNumber) {
       const user = await User.findOne({ phoneNumber });
 
+      /** if a user with provided number does'n exist - throw an app error */
       if (!user) {
         return next(
           new AppError("Пользователя с таким номером не существует", 400)
         );
       }
-
+      /** Send confirmation code to the user's @phoneNumber */
       await sendCode(req, res, next, phoneNumber, "sms");
     }
   }
 );
 
 /**
- * Protect routes (only logged in users will receive responses).
+ * !Protect routes.
  */
 const protect: any = catchAsync(
   async (req: IManageRequestUser, res: Response, next: NextFunction) => {
     let token: string | undefined;
 
+    /**Take the token from auth header Bearer or from the cookies*/
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith("Bearer")
@@ -202,13 +218,13 @@ const protect: any = catchAsync(
       );
     }
 
-    // 2) Check verification token
+    /** Check verification token */
     const decoded = await util.promisify(jwt.verify)(
       token,
       process.env.JWT_SECRET
     );
 
-    // 3) Check if user still exists
+    /** Check if user still exists */
     const currentUser = await User.findById(decoded.id);
     if (!currentUser) {
       return next(
@@ -219,14 +235,14 @@ const protect: any = catchAsync(
       );
     }
 
-    //* В случае миграции на email/password:
+    //TODO: Check if user changed @phoneNumber  after the token was issued
 
     /*  // 4) Check if user changed password after the token was issued
   if (currentUser.changedPasswordAfter(decoded.iat)) {
     return next(new AppError('User recently changed password! Please log in again.', 401));
   } */
 
-    // GRANT ACCESS TO PROTECTED ROUTE
+    /** Grant access to the protected route */
 
     req.user = currentUser;
     res.locals.user = currentUser;
@@ -235,10 +251,11 @@ const protect: any = catchAsync(
 );
 
 /**
- * Verify users' roles.
+ * Verifies users' roles.
  */
-const restrictTo = (...roles) => {
-  return (req, res, next) => {
+const restrictTo = (...roles: string[]) => {
+  return (req: IManageRequestUser, res: Response, next: NextFunction) => {
+    /** If a user doesn't have a proper role, don't grant access to the route*/
     if (!roles.includes(req.user.role)) {
       return next(new AppError("Ошибка прав", 403));
     }
@@ -248,7 +265,7 @@ const restrictTo = (...roles) => {
 
 export { login, userVerify, signUp, protect };
 
-//* В случае миграции на email/password:
+/** Functuion that work with email module */
 
 /* exports.forgotPassword = catchAsync(async (req, res, next) => {
   const user = await User.findOne({ email: req.body.email });
