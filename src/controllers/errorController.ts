@@ -1,8 +1,8 @@
-/* eslint-disable no-param-reassign */
-// eslint-disable-next-line no-unused-vars
 import { AppError } from "../utils/appError";
+import { Request, Response, NextFunction } from "express";
 
-const sendErrorDev = (err, res) => {
+/** Designs an error look when the app in the @development mode */
+const sendErrorDev = (err: any, res: Response): void => {
   res.status(err.statusCode).json({
     status: err.status,
     error: err,
@@ -11,16 +11,16 @@ const sendErrorDev = (err, res) => {
   });
 };
 
-const sendErrorProd = (err, res) => {
+/** Designs an error look when the app in the @production mode */
+const sendErrorProd = (err: any, res: Response): void => {
   if (err.isOperational) {
     res.status(err.statusCode).json({
       status: err.status,
       message: err.message,
     });
-    /* 
-    programming or other unknown error: dont leak error details */
+
+    /** programming or other unknown error: dont leak error details */
   } else {
-    // eslint-disable-next-line no-console
     console.error("ERROR!");
 
     res.status(500).json({
@@ -30,27 +30,44 @@ const sendErrorProd = (err, res) => {
   }
 };
 
-const handleCastErrorDB = (err) => {
-  const message = `There is no ${err.value}: ${err.path}`;
+/** Handles @database cast errors */
+const handleCastErrorDB = (err: any): AppError => {
+  let message: string;
+
+  message = `There is no ${err.value}: ${err.path}`;
 
   return new AppError(message, 400);
 };
 
-const handleDuplicateFieldsDB = (err) => {
-  const value = err.errmsg.match(/"([^\\"]|\\")*"/)[0];
-  const message = `Duplicate field ${value}. Please use another field value`;
+/** Handles @database duplocate field errors   */
+const handleDuplicateFieldsDB = (err: any): AppError => {
+  let value: string;
+  let message: string;
+
+  value = err.errmsg.match(/"([^\\"]|\\")*"/)[0];
+  message = `Duplicate field ${value}. Please use another field value`;
 
   return new AppError(message, 400);
 };
 
-const handleValidationErrorDB = (err) => {
-  const message = { ...err.message };
+/** Handles @database validation errors   */
+const handleValidationErrorDB = (err: any): AppError => {
+  let message: string;
+
+  message = { ...err.message };
+
   return new AppError(message, 400);
 };
 
-const handleJWTError = () => new AppError("Invalid signature.", 401);
+/** Handles @JWT signature errors   */
+const handleJWTError = (): AppError => new AppError("Invalid signature.", 401);
 
-export default (err, req, res, next) => {
+export default (
+  err: any,
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   err.statusCode = err.statusCode || 500;
   err.status = err.status || "error";
 
